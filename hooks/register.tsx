@@ -62,12 +62,12 @@ const CRITTERS = [
 // ── small helpers ─────────────────────────────────────────────────────────
 
 function hash(text: string): number {
-  let h = 0x811c9dc5
+  let acc = 0x811c9dc5
   for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i)
-    h = Math.imul(h, 0x01000193)
+    acc ^= text.charCodeAt(i)
+    acc = Math.imul(acc, 0x01000193)
   }
-  return h >>> 0
+  return acc >>> 0
 }
 
 function rng(seed: number): () => number {
@@ -127,7 +127,7 @@ function toBase64(bytes: Uint8Array): string {
   return out.join('')
 }
 
-function compactTokens(n: number): string {
+function shortCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
   if (n >= 1000) return `${Math.round(n / 1000)}k`
   return String(n)
@@ -350,17 +350,17 @@ function spritePixels(seed: number, p: Palette, pose: Pose): Uint8Array {
 
 const spriteCache = new Map<string, string>()
 
-function poseKey(pose: Pose): string {
+function poseId(pose: Pose): string {
   return `${pose.breathe ? 'b' : '-'}${pose.blink ? 'k' : '-'}${pose.look}${pose.hop ? 'h' : '-'}`
 }
 
 function spriteSource(seed: number, p: Palette, pose: Pose): { rgba: string; width: number; height: number } {
-  const key = `${seed}|${p.colors.join()}|${p.dark}|${poseKey(pose)}`
-  let rgba = spriteCache.get(key)
+  const cacheId = `${seed}|${p.colors.join()}|${p.dark}|${poseId(pose)}`
+  let rgba = spriteCache.get(cacheId)
   if (rgba === undefined) {
     if (spriteCache.size > 64) spriteCache.clear()
     rgba = toBase64(spritePixels(seed, p, pose))
-    spriteCache.set(key, rgba)
+    spriteCache.set(cacheId, rgba)
   }
   return { rgba, width: SPRITE * SPRITE_SCALE, height: SPRITE * SPRITE_SCALE }
 }
@@ -371,8 +371,8 @@ const ringCache = new Map<string, string>()
 
 function ringSource(percent: number, fill: string, track: string): { rgba: string; width: number; height: number } {
   const pct = Math.max(0, Math.min(100, Math.round(percent)))
-  const key = `${pct}|${fill}|${track}`
-  let rgba = ringCache.get(key)
+  const cacheId = `${pct}|${fill}|${track}`
+  let rgba = ringCache.get(cacheId)
   if (rgba === undefined) {
     if (ringCache.size > 256) ringCache.clear()
     const N = RING_PX
@@ -417,7 +417,7 @@ function ringSource(percent: number, fill: string, track: string): { rgba: strin
       }
     }
     rgba = toBase64(out)
-    ringCache.set(key, rgba)
+    ringCache.set(cacheId, rgba)
   }
   return { rgba, width: RING_PX, height: RING_PX }
 }
@@ -459,9 +459,9 @@ async function drawFrame($: EngineInterface): Promise<void> {
   const m = await read($, meta)
   const p = await read($, palette)
   const pose = currentPose(m.seed)
-  const key = poseKey(pose)
-  if (key === lastPose) return
-  lastPose = key
+  const id = poseId(pose)
+  if (id === lastPose) return
+  lastPose = id
   await $.ui.blit({ requestId: bandRequestId, key: 'avatar', source: spriteSource(m.seed, p, pose) })
 }
 
@@ -524,7 +524,7 @@ async function storeUsage($: EngineInterface, figures: Pick<SessionUsage, 'conte
   const limit = (kind: string) => figures.rateLimits.find(r => r.kind === kind)
   const next: Usage = {
     context: figures.context.percent,
-    tokens: figures.context.tokens,
+    filled: figures.context.tokens,
     window: figures.context.window,
     fiveHour: limit('five_hour')?.percentUsed,
     fiveHourResets: limit('five_hour')?.resetsAt,
@@ -612,8 +612,8 @@ type Gauge = { label: string; percent: number; detail: string }
 function gauges(u: Usage): Gauge[] {
   const list: Gauge[] = []
   if (u.window !== undefined) {
-    const left = u.tokens === undefined ? u.window : Math.max(0, u.window - u.tokens)
-    list.push({ label: 'Context', percent: u.context ?? 0, detail: `${compactTokens(left)} left` })
+    const left = u.filled === undefined ? u.window : Math.max(0, u.window - u.filled)
+    list.push({ label: 'Context', percent: u.context ?? 0, detail: `${shortCount(left)} left` })
   }
   if (u.fiveHour !== undefined) {
     list.push({ label: '5-hour limit', percent: u.fiveHour, detail: untilText(u.fiveHourResets, u.now) })
@@ -738,7 +738,7 @@ export const register: Register = on => {
       bandRequestId = e.requestId
       isWorking = isWorking || e.props.isWorking
       const pose = currentPose(m.seed)
-      lastPose = poseKey(pose)
+      lastPose = poseId(pose)
 
       const rings = (
         <Box flexDirection="row" width={ringsWidth}>

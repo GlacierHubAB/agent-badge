@@ -21,7 +21,7 @@ export type Palette = {
 
 export type Usage = {
   context?: number
-  tokens?: number
+  filled?: number
   window?: number
   fiveHour?: number
   fiveHourResets?: string
