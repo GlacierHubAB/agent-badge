@@ -1,6 +1,8 @@
 # Agent Badge
 
-A pinned band above the Claude Code prompt that tells you at a glance **who this agent is, what it's doing, and how much room it has left**.
+A pinned band above the Claude Code prompt that tells you at a glance **who this agent is, what it's doing, what it did before, and how much room it has left**.
+
+Switch tasks halfway through a session and Agent Badge notices: the new task takes the top line and the old one moves to an "earlier" trail, so you always know what this session has already worked on, even after hours away or a dozen tabs later.
 
 ```
  ▄██▄▄██▄  Fuzzy Koala  CODING AGENT
@@ -11,8 +13,9 @@ A pinned band above the Claude Code prompt that tells you at a glance **who this
 
 ## Features
 
+- **Never lose track of a session's history.** Every time you switch context mid-session, Agent Badge spots it and keeps a trail of what the session worked on before (the last three tasks), right under the current one. Follow-ups, refinements and "thanks" don't count as switches, so the trail stays clean. Labels are saved per session, so `claude --resume` brings the trail back too.
 - **A critter per session.** Each session gets its own procedurally generated 16×16 pixel-art creature and name (e.g. "Fuzzy Koala"), seeded from the session id, so a resumed session keeps the same one. It breathes and blinks when idle, and bounces and looks around while Claude is working.
-- **Role and task.** After each prompt you type, a small Haiku call labels the session's role (coding agent, copywriter, media editor, researcher…) and current task. When the task changes, the previous one moves to the "earlier" line (last three kept).
+- **Role and current task.** After each prompt you type, a small Haiku call labels the session's role (coding agent, copywriter, media editor, researcher…) and what it's working on now.
 - **Model and folder** of the session.
 - **Gauges.** Ring charts for the context window and, on subscription plans, the 5-hour and weekly usage limits, each with plain-language detail ("124k left", "resets in 2h 10m"), plus the session's spend. They switch to your theme's warning colour at 75% and alert colour at 90%.
 - **Responsive.** Rings on wide terminals, slim bars on narrower ones, gauges hidden when space is tight.

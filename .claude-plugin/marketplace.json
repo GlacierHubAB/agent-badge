@@ -8,8 +8,10 @@
   "plugins": [
     {
       "name": "agent-badge",
-      "description": "Animated pixel-art critter, agent role, current and past tasks, model, folder, and context and usage-limit gauges, pinned above the prompt.",
-      "author": { "name": "GlacierHub AB" },
+      "description": "Tracks each session's role, current task and the tasks it worked on before, so context switches are never forgotten. With an animated pixel-art critter, model, folder, and context and usage-limit gauges, pinned above the prompt.",
+      "author": {
+        "name": "GlacierHub AB"
+      },
       "category": "productivity",
       "source": "./",
       "homepage": "https://github.com/GlacierHubAB/agent-badge"

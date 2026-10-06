@@ -1,7 +1,7 @@
 {
   "name": "agent-badge",
-  "version": "1.0.3",
-  "description": "A pinned band above the prompt that gives every Claude Code session an animated pixel-art critter, labels what kind of agent it is and what it's working on, and shows context and usage-limit gauges.",
+  "version": "1.0.4",
+  "description": "A pinned band above the prompt that shows each Claude Code session's role, current task and a trail of what it worked on before, so context switches are never forgotten, with an animated pixel-art critter and context and usage-limit gauges.",
   "author": {
     "name": "GlacierHub AB",
     "url": "https://github.com/GlacierHubAB"
@@ -10,6 +10,7 @@
   "documentationUrl": "https://github.com/GlacierHubAB/agent-badge#readme",
   "supportUrl": "https://github.com/GlacierHubAB/agent-badge/issues",
   "privacyPolicyUrl": "https://github.com/GlacierHubAB/agent-badge/blob/main/PRIVACY.md",
+  "termsOfServiceUrl": "https://github.com/GlacierHubAB/agent-badge/blob/main/LICENSE",
   "repository": "https://github.com/GlacierHubAB/agent-badge",
   "license": "MIT",
   "keywords": [
