@@ -1,14 +1,25 @@
 {
   "name": "agent-badge",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A pinned band above the prompt that gives every Claude Code session an animated pixel-art critter, labels what kind of agent it is and what it's working on, and shows context and usage-limit gauges.",
   "author": {
     "name": "GlacierHub AB",
     "url": "https://github.com/GlacierHubAB"
   },
   "homepage": "https://github.com/GlacierHubAB/agent-badge",
+  "documentationUrl": "https://github.com/GlacierHubAB/agent-badge#readme",
+  "supportUrl": "https://github.com/GlacierHubAB/agent-badge/issues",
+  "privacyPolicyUrl": "https://github.com/GlacierHubAB/agent-badge/blob/main/PRIVACY.md",
   "repository": "https://github.com/GlacierHubAB/agent-badge",
   "license": "MIT",
-  "keywords": ["statusline", "ui", "band", "usage", "context", "avatar", "mod"],
+  "keywords": [
+    "statusline",
+    "ui",
+    "band",
+    "usage",
+    "context",
+    "avatar",
+    "mod"
+  ],
   "types": "./types/index.d.ts"
 }
