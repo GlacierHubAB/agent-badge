@@ -41,6 +41,18 @@ Collapse the band any time with `[-]` or `Ctrl+X` `Ctrl+A`.
 
 Colours are read from an [Omarchy](https://omarchy.org) theme at `~/.local/state/omarchy/current/theme/colors.toml` when present, and refresh when you switch themes. Without it, a built-in green/yellow/pink palette is used.
 
+## Hooks
+
+Agent Badge hooks these Claude Code events. None of them changes what passes through; each passes its input on unchanged.
+
+| Event | What it does |
+| --- | --- |
+| `prompt.submit` | Reads the text of a prompt **you typed** (not slash commands, not prompts from plugins or other agents) and queues it for role and task labelling. The prompt itself is passed on untouched, and labelling runs afterwards, so your prompt is never delayed. |
+| `session.start` | Restores the session's saved labels, reads the model, folder, theme and usage, and starts the refresh and animation timers. |
+| `session.measure` | Picks up new context, usage-limit and cost figures after each turn. |
+| `turn.start` / `turn.complete` | Switches the critter between its idle and working animations, and refreshes the model shown. |
+| `ui.render` (`AbovePrompt`) | Draws the band. It yields to Claude Code's own surveys and to subagent views. |
+
 ## Privacy and cost
 
 To label the role and task, the text of each prompt you type (up to 4,000 characters), the current role and task, and the earlier tasks are sent to Claude Haiku through your own Claude Code session. That's one small request per prompt, billed like any other Claude Code usage. Slash commands are skipped. Nothing is sent anywhere else. The labels are stored in Claude Code's local plugin store so resumed sessions keep them.

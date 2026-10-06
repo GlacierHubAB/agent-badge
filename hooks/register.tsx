@@ -447,7 +447,17 @@ function currentPose(seed: number): Pose {
 async function animate($: EngineInterface): Promise<void> {
   tick++
   if (bandRequestId === undefined) return
-  const [m, p] = await Promise.all([read($, meta), read($, palette)])
+  try {
+    await drawFrame($)
+  } catch {
+    // The band may be collapsed or not mounted yet; try again next tick.
+  }
+}
+
+async function drawFrame($: EngineInterface): Promise<void> {
+  if (bandRequestId === undefined) return
+  const m = await read($, meta)
+  const p = await read($, palette)
   const pose = currentPose(m.seed)
   const key = poseKey(pose)
   if (key === lastPose) return
@@ -469,12 +479,10 @@ async function save($: EngineInterface): Promise<void> {
 }
 
 async function refreshMeta($: EngineInterface): Promise<void> {
-  const [model, cwd, home, id] = await Promise.all([
-    $.session.model(),
-    $.session.cwd(),
-    $.env.get('HOME'),
-    $.session.id(),
-  ])
+  const model = await $.session.model()
+  const cwd = await $.session.cwd()
+  const home = await $.env.get('HOME')
+  const id = await $.session.id()
   const folder = home && cwd.startsWith(home) ? `~${cwd.slice(home.length)}` : cwd
   const next: Meta = { model: prettyModel(model), folder, seed: hash(id) }
   const current = await read($, meta)
@@ -566,6 +574,37 @@ async function classify($: EngineInterface, text: string): Promise<void> {
   await save($)
 }
 
+async function refreshAll($: EngineInterface): Promise<void> {
+  try {
+    await refreshMeta($)
+    await refreshPalette($)
+    await refreshUsage($)
+  } catch {
+    // Figures refresh again on the next tick.
+  }
+}
+
+// Prompts waiting to be labelled, handled one at a time in order.
+const pendingLabels: string[] = []
+let isLabelling = false
+
+async function drainLabels($: EngineInterface): Promise<void> {
+  if (isLabelling) return
+  isLabelling = true
+  try {
+    while (pendingLabels.length > 0) {
+      const text = pendingLabels.shift() as string
+      try {
+        await classify($, text)
+      } catch {
+        // A failed label leaves the band as it was.
+      }
+    }
+  } finally {
+    isLabelling = false
+  }
+}
+
 // ── drawing ───────────────────────────────────────────────────────────────
 
 type Gauge = { label: string; percent: number; detail: string }
@@ -596,23 +635,15 @@ function smoothBar(percent: number): { full: string; partial: string; empty: str
 }
 
 export const register: Register = on => {
-  let queue: Promise<void> = Promise.resolve()
-
   on('session.start', async ($, e, next) => {
     const id = await $.session.id()
     const saved = (await $.store.get(`badge:${id}`)) as Badge | undefined
     const current = await read($, badge)
     if (saved && current.role === 'new agent') await update($, badge, () => saved)
-    await Promise.all([refreshMeta($), refreshPalette($), refreshUsage($)])
+    await refreshAll($)
     // Catch /model switches, theme changes and rate-limit drift between turns.
-    $.clock.every(5000, () => {
-      void refreshMeta($)
-      void refreshPalette($)
-      void refreshUsage($)
-    })
-    $.clock.every(TICK_MS, () => {
-      void animate($).catch(() => {})
-    })
+    $.clock.every(5000, () => refreshAll($))
+    $.clock.every(TICK_MS, () => animate($))
     return next(e)
   })
 
@@ -620,9 +651,8 @@ export const register: Register = on => {
     const text = e.text.trim()
     if (e.origin.kind === 'composer' && text && !text.startsWith('/')) {
       // Label in the background so the prompt is never held up.
-      $.clock.after(0, () => {
-        queue = queue.then(() => classify($, text)).catch(() => {})
-      })
+      pendingLabels.push(text)
+      $.clock.after(0, () => drainLabels($))
     }
     return next(e)
   })
@@ -646,7 +676,10 @@ export const register: Register = on => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey || e.props.view.agentId !== undefined) return next(e)
 
-    const [b, m, p, u] = await Promise.all([read($, badge), read($, meta), read($, palette), read($, usage)])
+    const b = await read($, badge)
+    const m = await read($, meta)
+    const p = await read($, palette)
+    const u = await read($, usage)
     const body = bodyColor(m.seed, p.colors)
     const name = critterName(m.seed)
     const width = e.props.bodyColumns
