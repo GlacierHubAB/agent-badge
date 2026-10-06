@@ -1,0 +1,19 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "agent-badge",
+  "description": "Agent Badge for Claude Code",
+  "owner": {
+    "name": "GlacierHub AB",
+    "url": "https://github.com/GlacierHubAB"
+  },
+  "plugins": [
+    {
+      "name": "agent-badge",
+      "description": "Animated pixel-art critter, agent role, current and past tasks, model, folder, and context and usage-limit gauges, pinned above the prompt.",
+      "author": { "name": "GlacierHub AB" },
+      "category": "productivity",
+      "source": "./",
+      "homepage": "https://github.com/GlacierHubAB/agent-badge"
+    }
+  ]
+}
