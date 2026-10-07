@@ -20,7 +20,7 @@ That request goes to the same Claude API your session already uses, under your o
 
 ## What it stores
 
-The role, current task and earlier tasks for each session, in Claude Code's local plugin store on your machine, so a resumed session keeps its labels. Nothing is stored anywhere else. Uninstalling the plugin stops all of the above.
+The role, current task and earlier tasks for each session, in Claude Code's local plugin store on your machine, so a resumed session keeps its labels. Since 1.1.0 it also keeps the figures its gauges show (context, rate limits, spend) there, under `usage:<session id>`, so other local tools such as Den can show the same gauges. Nothing is stored anywhere else. Uninstalling the plugin stops all of the above.
 
 ## Contact
 

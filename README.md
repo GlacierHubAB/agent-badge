@@ -56,6 +56,10 @@ Agent Badge hooks these Claude Code events. None of them changes what passes thr
 | `turn.start` / `turn.complete` | Switches the critter between its idle and working animations, and refreshes the model shown. |
 | `ui.render` (`AbovePrompt`) | Draws the band. It yields to Claude Code's own surveys and to subagent views. |
 
+## Sharing with other tools
+
+Agent Badge keeps two records per session in Claude Code's local plugin store: `badge:<session id>` (role, task, earlier tasks) and `usage:<session id>` (context, rate limits and spend, the same figures the gauges show). Other tools on the machine can read them to show the same identity; [Den](https://github.com/GlacierHubAB/den) does.
+
 ## Privacy and cost
 
 To label the role and task, the text of each prompt you type (up to 4,000 characters), the current role and task, and the earlier tasks are sent to Claude Haiku through your own Claude Code session. That's one small request per prompt, billed like any other Claude Code usage. Slash commands are skipped. Nothing is sent anywhere else. The labels are stored in Claude Code's local plugin store so resumed sessions keep them. The full policy is in [PRIVACY.md](PRIVACY.md).

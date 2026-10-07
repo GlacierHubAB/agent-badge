@@ -535,7 +535,12 @@ async function storeUsage($: EngineInterface, figures: Pick<SessionUsage, 'conte
     now: Math.floor((await $.clock.now()) / 60000) * 60000,
   }
   const current = await read($, usage)
-  if (JSON.stringify(current) !== JSON.stringify(next)) await update($, usage, () => next)
+  if (JSON.stringify(current) !== JSON.stringify(next)) {
+    await update($, usage, () => next)
+    // Shared with other tools on this machine (Den reads it to show the same
+    // gauges per agent). Same figures as the band, nothing more.
+    await $.store.set(`usage:${await $.session.id()}`, next)
+  }
 }
 
 async function refreshUsage($: EngineInterface): Promise<void> {
