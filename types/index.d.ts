@@ -8,6 +8,8 @@ export type Meta = {
   model: string
   folder: string
   seed: number
+  /** Colour assigned by Den, '' when the seed picks. */
+  color: string
 }
 
 export type Palette = {

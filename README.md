@@ -42,7 +42,9 @@ Collapse the band any time with `[-]` or `Ctrl+X` `Ctrl+A`.
 
 ## Theming
 
-Colours are read from an [Omarchy](https://omarchy.org) theme at `~/.local/state/omarchy/current/theme/colors.toml` when present, and refresh when you switch themes. Without it, a built-in green/yellow/pink palette is used.
+Colours are read from an [Omarchy](https://omarchy.org) theme at `~/.local/state/omarchy/current/theme/colors.toml` when present, and refresh when you switch themes. Only the theme's real hues are used for critters (greys are skipped), topped up from a built-in set of twelve soft colours so that at least ten are available and sessions stay easy to tell apart, even on a monochrome theme.
+
+The critter's colour is picked by the session id. When [Den](https://github.com/GlacierHubAB/den) is running it hands out colours so that no two live sessions share one, and records them in `~/.local/state/den/colors.json`; the badge follows that file when it has an entry for the session.
 
 ## Hooks
 

@@ -12,9 +12,32 @@ const meta = atom({ plugin: 'agent-badge', key: 'meta' } as const, {
   model: '',
   folder: '',
   seed: 0,
+  color: '',
 } as Meta)
+// Body colours the theme does not supply: soft, distinct, readable on a dark
+// background. Den (the fleet TUI) uses the same list in the same order, so a
+// session's colour matches there.
+const HUES = [
+  '#ea9e9e', // rose
+  '#f0b07a', // apricot
+  '#e8d27a', // straw
+  '#a7d98c', // leaf
+  '#66cb8e', // mint
+  '#7fd3c4', // teal
+  '#86c6e8', // sky
+  '#9bb0f0', // periwinkle
+  '#b9a3f0', // lilac
+  '#e39ad8', // orchid
+  '#f0a8c0', // pink
+  '#c9b89a', // sand
+]
+const MIN_HUES = 10
+// Den records the colour it gave each session here so no two live agents
+// share one; the badge follows it when present.
+const DEN_COLORS = 'den/colors.json'
+
 const palette = atom({ plugin: 'agent-badge', key: 'palette' } as const, {
-  colors: ['#66cb8e', '#e8b84a', '#ea9e9e'],
+  colors: fillHues([], '#000000'),
   dark: '#000000',
   warn: '#e8b84a',
   alert: '#ea9e9e',
@@ -105,8 +128,27 @@ function mix(a: RGB, b: RGB, t: number): RGB {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
 }
 
-function bodyColor(seed: number, colors: string[]): string {
-  return pick(colors, seed)
+function bodyColor(seed: number, colors: string[], assigned = ''): string {
+  return assigned || pick(colors, seed)
+}
+
+// saturation is the spread between the strongest and weakest channel; greys
+// score 0.
+function saturation(hex: string): number {
+  const c = hexToRgb(hex)
+  return Math.max(...c) - Math.min(...c)
+}
+
+// fillHues appends curated hues until the list has MIN_HUES entries, skipping
+// ones already present or that vanish against the background.
+function fillHues(colors: string[], dark: string): string[] {
+  const out = [...colors]
+  for (const h of HUES) {
+    if (out.length >= MIN_HUES) break
+    if (out.includes(h) || Math.abs(luminance(h) - luminance(dark)) <= 60) continue
+    out.push(h)
+  }
+  return out
 }
 
 const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
@@ -188,9 +230,9 @@ function species(seed: number): Species {
   }
 }
 
-function spritePixels(seed: number, p: Palette, pose: Pose): Uint8Array {
+function spritePixels(seed: number, p: Palette, pose: Pose, assigned = ''): Uint8Array {
   const s = species(seed)
-  const body = hexToRgb(bodyColor(seed, p.colors))
+  const body = hexToRgb(bodyColor(seed, p.colors, assigned))
   const white: RGB = [255, 255, 255]
   const ink = mix(hexToRgb(p.dark), body, 0.15)
   const outline = mix(body, ink, 0.6)
@@ -354,12 +396,12 @@ function poseId(pose: Pose): string {
   return `${pose.breathe ? 'b' : '-'}${pose.blink ? 'k' : '-'}${pose.look}${pose.hop ? 'h' : '-'}`
 }
 
-function spriteSource(seed: number, p: Palette, pose: Pose): { rgba: string; width: number; height: number } {
-  const cacheId = `${seed}|${p.colors.join()}|${p.dark}|${poseId(pose)}`
+function spriteSource(seed: number, p: Palette, pose: Pose, assigned = ''): { rgba: string; width: number; height: number } {
+  const cacheId = `${seed}|${assigned}|${p.colors.join()}|${p.dark}|${poseId(pose)}`
   let rgba = spriteCache.get(cacheId)
   if (rgba === undefined) {
     if (spriteCache.size > 64) spriteCache.clear()
-    rgba = toBase64(spritePixels(seed, p, pose))
+    rgba = toBase64(spritePixels(seed, p, pose, assigned))
     spriteCache.set(cacheId, rgba)
   }
   return { rgba, width: SPRITE * SPRITE_SCALE, height: SPRITE * SPRITE_SCALE }
@@ -462,7 +504,7 @@ async function drawFrame($: EngineInterface): Promise<void> {
   const id = poseId(pose)
   if (id === lastPose) return
   lastPose = id
-  await $.ui.blit({ requestId: bandRequestId, key: 'avatar', source: spriteSource(m.seed, p, pose) })
+  await $.ui.blit({ requestId: bandRequestId, key: 'avatar', source: spriteSource(m.seed, p, pose, m.color) })
 }
 
 // ── session data ──────────────────────────────────────────────────────────
@@ -484,11 +526,28 @@ async function refreshMeta($: EngineInterface): Promise<void> {
   const home = await $.env.get('HOME')
   const id = await $.session.id()
   const folder = home && cwd.startsWith(home) ? `~${cwd.slice(home.length)}` : cwd
-  const next: Meta = { model: prettyModel(model), folder, seed: hash(id) }
+  const next: Meta = { model: prettyModel(model), folder, seed: hash(id), color: await denColor($, home, id) }
   const current = await read($, meta)
-  if (current.model !== next.model || current.folder !== next.folder || current.seed !== next.seed) {
+  if (current.model !== next.model || current.folder !== next.folder || current.seed !== next.seed || current.color !== next.color) {
     await update($, meta, () => next)
   }
+}
+
+// denColor returns the colour Den assigned this session, or '' when Den has
+// not recorded one.
+async function denColor($: EngineInterface, home: string | undefined, id: string): Promise<string> {
+  const state = (await $.env.get('XDG_STATE_HOME')) || (home ? `${home}/.local/state` : '')
+  if (!state) return ''
+  try {
+    const parsed: unknown = JSON.parse(await $.fs.read(`${state}/${DEN_COLORS}`))
+    if (parsed && typeof parsed === 'object') {
+      const c = (parsed as Record<string, unknown>)[id]
+      if (typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c)) return c.toLowerCase()
+    }
+  } catch {
+    // No Den, or nothing recorded yet: the seed picks.
+  }
+  return ''
 }
 
 async function refreshPalette($: EngineInterface): Promise<void> {
@@ -505,11 +564,11 @@ async function refreshPalette($: EngineInterface): Promise<void> {
     if (m?.[1] && m[2]) values[m[1]] = m[2].toLowerCase()
   }
   const dark = values.background ?? '#000000'
-  const colors = [...new Set(PALETTE_KEYS.map(k => values[k]).filter((c): c is string => Boolean(c)))]
-    .filter(c => Math.abs(luminance(c) - luminance(dark)) > 60)
-  if (colors.length === 0) return
+  // Real hues only: a monochrome theme would otherwise give every agent grey.
+  const themed = [...new Set(PALETTE_KEYS.map(k => values[k]).filter((c): c is string => Boolean(c)))]
+    .filter(c => Math.abs(luminance(c) - luminance(dark)) > 60 && saturation(c) >= 40)
   const next: Palette = {
-    colors,
+    colors: fillHues(themed, dark),
     dark,
     warn: values.yellow ?? values.orange ?? '#e8b84a',
     alert: values.red ?? '#ea9e9e',
@@ -685,7 +744,7 @@ export const register: Register = on => {
     const m = await read($, meta)
     const p = await read($, palette)
     const u = await read($, usage)
-    const body = bodyColor(m.seed, p.colors)
+    const body = bodyColor(m.seed, p.colors, m.color)
     const name = critterName(m.seed)
     const width = e.props.bodyColumns
     const list = gauges(u)
@@ -783,7 +842,7 @@ export const register: Register = on => {
         <Box flexDirection="row" paddingTop={1}>
           <Image
             key="avatar"
-            source={spriteSource(m.seed, p, pose)}
+            source={spriteSource(m.seed, p, pose, m.color)}
             columns={AVATAR_COLUMNS}
             rows={AVATAR_ROWS}
             alt={name}
