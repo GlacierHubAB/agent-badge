@@ -1,6 +1,6 @@
 {
   "name": "agent-badge",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "A pinned band above the prompt that shows each Claude Code session's role, current task and a trail of what it worked on before, so context switches are never forgotten, with an animated pixel-art critter and context and usage-limit gauges.",
   "author": {
     "name": "GlacierHub AB",

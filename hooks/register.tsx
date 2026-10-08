@@ -143,10 +143,10 @@ function saturation(hex: string): number {
 // ones already present or that vanish against the background.
 function fillHues(colors: string[], dark: string): string[] {
   const out = [...colors]
-  for (const h of HUES) {
+  for (const hue of HUES) {
     if (out.length >= MIN_HUES) break
-    if (out.includes(h) || Math.abs(luminance(h) - luminance(dark)) <= 60) continue
-    out.push(h)
+    if (out.includes(hue) || Math.abs(luminance(hue) - luminance(dark)) <= 60) continue
+    out.push(hue)
   }
   return out
 }
