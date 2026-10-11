@@ -15,7 +15,7 @@ Switch tasks halfway through a session and Agent Badge notices: the new task tak
 
 - **Never lose track of a session's history.** Every time you switch context mid-session, Agent Badge spots it and keeps a trail of what the session worked on before (the last three tasks), right under the current one. Follow-ups, refinements and "thanks" don't count as switches, so the trail stays clean. Labels are saved per session, so `claude --resume` brings the trail back too.
 - **A critter per session.** Each session gets its own procedurally generated 16×16 pixel-art creature and name (e.g. "Fuzzy Koala"), seeded from the session id, so a resumed session keeps the same one. It breathes and blinks when idle, and bounces and looks around while Claude is working.
-- **Role and current task.** After each prompt you type, a small Haiku call labels the session's role (coding agent, copywriter, media editor, researcher…) and what it's working on now.
+- **Role and current task.** A small Haiku call labels the session's role (coding agent, copywriter, media editor, researcher…) and what it's working on now: after each prompt you type or another agent sends it, and after each turn from the session's own report of what it did, so the band tracks the work rather than the last request.
 - **Model and folder** of the session.
 - **Gauges.** Ring charts for the context window and, on subscription plans, the 5-hour and weekly usage limits, each with plain-language detail ("124k left", "resets in 2h 10m"), plus the session's spend. They switch to your theme's warning colour at 75% and alert colour at 90%.
 - **Responsive.** Rings on wide terminals, slim bars on narrower ones, gauges hidden when space is tight.
@@ -52,10 +52,10 @@ Agent Badge hooks these Claude Code events. None of them changes what passes thr
 
 | Event | What it does |
 | --- | --- |
-| `prompt.submit` | Reads the text of a prompt **you typed** (not slash commands, not prompts from plugins or other agents) and queues it for role and task labelling. The prompt itself is passed on untouched, and labelling runs afterwards, so your prompt is never delayed. |
+| `prompt.submit` | Reads the text of a prompt you typed or another agent sent (not slash commands, not prompts from plugins, timers or background tasks) and queues it for role and task labelling. The prompt itself is passed on untouched, and labelling runs afterwards, so your prompt is never delayed. |
 | `session.start` | Restores the session's saved labels, reads the model, folder, theme and usage, and starts the refresh and animation timers. |
 | `session.measure` | Picks up new context, usage-limit and cost figures after each turn. |
-| `turn.start` / `turn.complete` | Switches the critter between its idle and working animations, and refreshes the model shown. |
+| `turn.start` / `turn.complete` | Switches the critter between its idle and working animations, and refreshes the model shown. At the end of a turn the session's final message (when it is more than a few words) is queued for labelling too, so the task follows what the session actually did. |
 | `ui.render` (`AbovePrompt`) | Draws the band. It yields to Claude Code's own surveys and to subagent views. |
 
 ## Sharing with other tools
@@ -64,7 +64,7 @@ Agent Badge keeps two records per session in Claude Code's local plugin store: `
 
 ## Privacy and cost
 
-To label the role and task, the text of each prompt you type (up to 4,000 characters), the current role and task, and the earlier tasks are sent to Claude Haiku through your own Claude Code session. That's one small request per prompt, billed like any other Claude Code usage. Slash commands are skipped. Nothing is sent anywhere else. The labels are stored in Claude Code's local plugin store so resumed sessions keep them. The full policy is in [PRIVACY.md](PRIVACY.md).
+To label the role and task, the text of each prompt you type or another agent sends (up to 4,000 characters), the session's final message at the end of each turn (up to 4,000 characters), the current role and task, and the earlier tasks are sent to Claude Haiku through your own Claude Code session. That's one small request per prompt and one per turn, billed like any other Claude Code usage. Slash commands and one-line answers are skipped. Nothing is sent anywhere else. The labels are stored in Claude Code's local plugin store so resumed sessions keep them. The full policy is in [PRIVACY.md](PRIVACY.md).
 
 ## Development
 

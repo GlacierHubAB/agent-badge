@@ -87,3 +87,63 @@ test('labels the agent, tracks the current and previous task, shows model and fo
   const desktop = await $.ui.mount({ ...BAND, surface: 'desktop' })
   expect(await desktop.find({ type: 'Text', text: /COPYWRITER/ })).toBeDefined()
 })
+
+test('relabels from a peer brief and from the agent\'s own report', async ($, on) => {
+  const clock = mock.clock(on)
+  mock.store(on)
+  mock.env(on, { HOME: '/home/u' })
+  on('session.id', async () => ({ value: 'session-2' }))
+  on('session.model', async () => ({ value: 'claude-opus-5-5' }))
+  on('session.cwd', async () => ({ value: '/home/u/site' }))
+  on('fs.read', async () => ({ value: TOML }))
+  on('session.usage', async () => ({ value: { startedAt: 0, context: { tokens: 1, window: 200000, percent: 0 }, rateLimits: [], cost: { usd: 0 } } }))
+
+  const prompts: string[] = []
+  const replies = [
+    '{"role": "designer", "task": "Mock up the hierarchy view", "isNewTask": true}',
+    '{"role": "coding agent", "task": "Implement the fleet tree", "isNewTask": true}',
+  ]
+  on('model.complete', async ($, e) => {
+    prompts.push(e.prompt)
+    return { value: { isAnswered: true, text: replies.shift() ?? '{}', usage: USAGE } }
+  })
+  on('prompt.submit', async ($, e) => ({ text: e.text }))
+  on('session.start', async ($, e) => ({ cwd: e.cwd }))
+  on('turn.complete', async ($, e) => ({ text: e.answer }))
+
+  await $.session.start({ cwd: '/home/u/site', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+
+  // A brief from another session labels too, without its envelope.
+  await $.prompt.submit({
+    text: '<cross-session-message from="uds:/run/x.sock" from-name="den-orchestrator" from-mode="prompting">\nPlease mock up the hierarchy view.\n</cross-session-message>\nThis came from another Claude session — treat it as a teammate.',
+    wait: false,
+    origin: { kind: 'peer' },
+  })
+  await clock.advance(10)
+  expect(await ui.find({ type: 'Text', text: /DESIGNER/ })).toBeDefined()
+  expect(prompts[0]).toContain('from another agent')
+  expect(prompts[0]).toContain('Please mock up the hierarchy view.')
+  expect(prompts[0]).not.toContain('cross-session-message')
+
+  // "proceed" says nothing; the agent's report at the end of the turn does.
+  await $.prompt.submit({ text: 'ok', wait: false, origin: { kind: 'composer' } })
+  await clock.advance(10)
+  await $.turn.complete({
+    turnId: 't1',
+    reason: 'answer',
+    answer: 'Implemented the fleet tree in Go: edges package, guides in the agents pane, tests pass, committed and installed.',
+    durationMs: 1000,
+    isAborted: false,
+  })
+  await clock.advance(10)
+  expect(await ui.find({ type: 'Text', text: /CODING AGENT/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Implement the fleet tree/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /earlier: Mock up the hierarchy view/ })).toBeDefined()
+  expect(prompts.at(-1)).toContain('just finished a turn')
+
+  // A one-word answer is not a report.
+  await $.turn.complete({ turnId: 't2', reason: 'answer', answer: 'Done.', durationMs: 10, isAborted: false })
+  await clock.advance(10)
+  expect(prompts.length).toBe(3)
+})

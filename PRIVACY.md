@@ -4,9 +4,9 @@ Agent Badge runs entirely inside your Claude Code session. It has no server, no 
 
 ## What it sends, and where
 
-To label the session's role and current task, each prompt **you type** is sent to Claude Haiku **through your own Claude Code session**. Slash commands, and prompts from plugins or other agents, are skipped. Each request contains:
+To label the session's role and current task, each prompt **you type** or **another Claude Code session sends**, and the session's **final message at the end of each turn**, is sent to Claude Haiku **through your own Claude Code session**. Slash commands, prompts from plugins, timers and background tasks, and one-line answers are skipped. Each request contains:
 
-- the prompt's text, cut to its first 4,000 characters
+- the prompt's or the message's text, cut to its first 4,000 characters
 - the session's current role and task labels
 - up to three earlier task labels
 

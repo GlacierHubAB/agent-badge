@@ -511,9 +511,33 @@ async function drawFrame($: EngineInterface): Promise<void> {
 
 const SYSTEM = `You label a Claude Code session for a status band. Reply with JSON only:
 {"role": string, "task": string, "isNewTask": boolean}
-- role: what kind of agent this session is, 1-3 lowercase words, e.g. "coding agent", "copywriter", "media editor", "researcher", "sysadmin", "designer", "data analyst", "writer", "assistant". Keep the previous role unless the work clearly changed kind.
+- role: what kind of agent this session is, 1-3 lowercase words, e.g. "coding agent", "copywriter", "media editor", "researcher", "sysadmin", "designer", "data analyst", "writer", "assistant". Keep the previous role unless the work has clearly become a different kind; an agent that designed and now writes and tests code is a coding agent.
 - task: the current task as a short imperative phrase, at most 8 words, no trailing period.
-- isNewTask: true only when the new message starts a different task from the current one, not when it continues, refines, answers a question, or says thanks/ok.`
+- isNewTask: true only when the message starts a different task from the current one, not when it continues, refines, answers a question, or says thanks/ok.
+The message is from the user, from another agent directing this one, or the agent's own report at the end of a turn. A report says what the agent actually did: make the task reflect that work, not an older request.`
+
+// What a label is based on: the user's prompt, a peer's brief, or the
+// agent's own end-of-turn report.
+type LabelSource = 'user' | 'peer' | 'report'
+type Label = { source: LabelSource; text: string }
+
+// Origins whose text is worth labelling: a person or another agent
+// speaking to this session. Plugins, timers and background task reports
+// are not.
+const LABELLED_ORIGINS = new Set(['composer', 'bridge', 'sdk', 'peer', 'peer-send-message', 'coordinator', 'channel', 'projects-relay'])
+
+// A report shorter than this says nothing about the task ("Done.", "ok").
+const REPORT_MIN_CHARS = 40
+
+// stripPeerWrapper drops the cross-session envelope Claude Code puts around
+// another session's message, keeping what that session said.
+function stripPeerWrapper(text: string): string {
+  return text
+    .replace(/<cross-session-message[^>]*>/g, '')
+    .replace(/<\/cross-session-message>/g, '')
+    .replace(/^This came from another Claude session[^\n]*$/m, '')
+    .trim()
+}
 
 async function save($: EngineInterface): Promise<void> {
   const id = await $.session.id()
@@ -606,13 +630,18 @@ async function refreshUsage($: EngineInterface): Promise<void> {
   await storeUsage($, await $.session.usage())
 }
 
-async function classify($: EngineInterface, text: string): Promise<void> {
+async function classify($: EngineInterface, label: Label): Promise<void> {
   const current = await read($, badge)
+  const heading = label.source === 'user'
+    ? 'New message from the user:'
+    : label.source === 'peer'
+      ? 'New message from another agent directing this one:'
+      : 'The agent just finished a turn. Its report:'
   const prompt = [
     `Current role: ${current.role}`,
     `Current task: ${current.task}`,
     `Earlier tasks: ${current.history.join('; ') || 'none'}`,
-    `New message from the user:\n${text.slice(0, 4000)}`,
+    `${heading}\n${label.text.slice(0, 4000)}`,
   ].join('\n')
   const result = await $.model.complete({
     model: 'haiku',
@@ -648,18 +677,29 @@ async function refreshAll($: EngineInterface): Promise<void> {
   }
 }
 
-// Prompts waiting to be labelled, handled one at a time in order.
-const pendingLabels: string[] = []
+// Messages waiting to be labelled, handled one at a time in order. A newer
+// report replaces a queued one: only the latest says what the agent is on.
+const pendingLabels: Label[] = []
 let isLabelling = false
+
+function queueLabel($: EngineInterface, label: Label): void {
+  if (label.source === 'report') {
+    const i = pendingLabels.findIndex(l => l.source === 'report')
+    if (i >= 0) pendingLabels.splice(i, 1)
+  }
+  pendingLabels.push(label)
+  // Label in the background so the prompt or the turn is never held up.
+  $.clock.after(0, () => drainLabels($))
+}
 
 async function drainLabels($: EngineInterface): Promise<void> {
   if (isLabelling) return
   isLabelling = true
   try {
     while (pendingLabels.length > 0) {
-      const text = pendingLabels.shift() as string
+      const label = pendingLabels.shift() as Label
       try {
-        await classify($, text)
+        await classify($, label)
       } catch {
         // A failed label leaves the band as it was.
       }
@@ -713,10 +753,9 @@ export const register: Register = on => {
 
   on('prompt.submit', ($, e, next) => {
     const text = e.text.trim()
-    if (e.origin.kind === 'composer' && text && !text.startsWith('/')) {
-      // Label in the background so the prompt is never held up.
-      pendingLabels.push(text)
-      $.clock.after(0, () => drainLabels($))
+    if (LABELLED_ORIGINS.has(e.origin.kind) && text && !text.startsWith('/')) {
+      const peer = e.origin.kind !== 'composer' && e.origin.kind !== 'bridge' && e.origin.kind !== 'sdk'
+      queueLabel($, peer ? { source: 'peer', text: stripPeerWrapper(text) } : { source: 'user', text })
     }
     return next(e)
   })
@@ -733,7 +772,16 @@ export const register: Register = on => {
   })
 
   on('turn.complete', ($, e, next) => {
-    if (e.agentId === undefined) isWorking = false
+    if (e.agentId === undefined) {
+      isWorking = false
+      // What the agent did this turn is the best account of its task: a
+      // brief relayed by another agent, or "proceed", says little, the
+      // report says what actually happened.
+      const answer = e.answer.trim()
+      if (e.reason === 'answer' && !e.isAborted && answer.length >= REPORT_MIN_CHARS) {
+        queueLabel($, { source: 'report', text: answer })
+      }
+    }
     return next(e)
   })
 
