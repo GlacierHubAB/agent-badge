@@ -28,10 +28,12 @@ const HUES = [
   '#9bb0f0', // periwinkle
   '#b9a3f0', // lilac
   '#e39ad8', // orchid
+  '#a6b562', // olive
+  '#9fabc9', // slate
   '#f0a8c0', // pink
   '#c9b89a', // sand
 ]
-const MIN_HUES = 10
+const MIN_HUES = 12
 // Den records the colour it gave each session here so no two live agents
 // share one; the badge follows it when present.
 const DEN_COLORS = 'den/colors.json'
