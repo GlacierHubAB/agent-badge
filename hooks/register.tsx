@@ -15,25 +15,18 @@ const meta = atom({ plugin: 'agent-badge', key: 'meta' } as const, {
   color: '',
 } as Meta)
 // Body colours the theme does not supply: soft, distinct, readable on a dark
-// background. Den (the fleet TUI) uses the same list in the same order, so a
-// session's colour matches there.
+// background, and each passes agentColor. Den (the fleet TUI) uses the same
+// list in the same order, so a session's colour matches there.
 const HUES = [
-  '#ea9e9e', // rose
-  '#f0b07a', // apricot
-  '#e8d27a', // straw
   '#a7d98c', // leaf
-  '#66cb8e', // mint
   '#7fd3c4', // teal
   '#86c6e8', // sky
   '#9bb0f0', // periwinkle
-  '#b9a3f0', // lilac
-  '#e39ad8', // orchid
   '#a6b562', // olive
   '#9fabc9', // slate
-  '#f0a8c0', // pink
   '#c9b89a', // sand
 ]
-const MIN_HUES = 12
+const MIN_HUES = 7
 // Den records the colour it gave each session here so no two live agents
 // share one; the badge follows it when present.
 const DEN_COLORS = 'den/colors.json'
@@ -140,6 +133,66 @@ function saturation(hex: string): number {
   const c = hexToRgb(hex)
   return Math.max(...c) - Math.min(...c)
 }
+
+// agent colour rule: begin
+// The rule Den and the Drey dock share for a colour that stands for an
+// agent: it reads on the dock's dark and mid surfaces, is no grey, no
+// purple, sits in no band the dock uses for a meaning, and is no near twin
+// of one of its meaning colours. Den's theme.AgentColor is the same rule,
+// and Den's tests compare the numbers below with its own.
+const MEANING_COLORS = ['#ff6b6d', '#ea9e9e', '#ec4899', '#e8b84a', '#34d399', '#66cb8e']
+
+function linearChannel(byte: number): number {
+  const x = byte / 255
+  return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4)
+}
+
+function relLuminance(c: RGB): number {
+  return 0.2126 * linearChannel(c[0]) + 0.7152 * linearChannel(c[1]) + 0.0722 * linearChannel(c[2])
+}
+
+function contrastRatio(x: RGB, y: RGB): number {
+  const a = relLuminance(x)
+  const b = relLuminance(y)
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+}
+
+function oklab(c: RGB): [number, number, number] {
+  const r = linearChannel(c[0])
+  const g = linearChannel(c[1])
+  const b = linearChannel(c[2])
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+  return [
+    0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s,
+  ]
+}
+
+// agentColor reports whether hex, '#' and six lower-case hex digits, may
+// stand for an agent. Nothing is ever nudged into passing.
+function agentColor(hex: string): boolean {
+  if (!/^#[0-9a-f]{6}$/.test(hex)) return false
+  const c = hexToRgb(hex)
+  if (contrastRatio(c, hexToRgb('#0a0a0a')) < 7.0) return false
+  if (contrastRatio(c, hexToRgb('#4f4f4f')) < 3.5) return false
+  const [lightness, a, b] = oklab(c)
+  const chroma = Math.hypot(a, b)
+  let hue = Math.atan2(b, a) * 180 / Math.PI
+  if (hue < 0) hue += 360
+  if (lightness > 0.93) return false
+  if (chroma < 0.04) return false
+  if (hue >= 280 && hue <= 348) return false
+  if (chroma >= 0.06 && (hue >= 350 || hue <= 50 || (hue >= 55 && hue <= 110) || (hue >= 140 && hue <= 178))) return false
+  for (const meaning of MEANING_COLORS) {
+    const [l2, a2, b2] = oklab(hexToRgb(meaning))
+    if (Math.hypot(lightness - l2, a - a2, b - b2) < 0.07) return false
+  }
+  return true
+}
+// agent colour rule: end
 
 // fillHues appends curated hues until the list has MIN_HUES entries, skipping
 // ones already present or that vanish against the background.
@@ -591,8 +644,10 @@ async function refreshPalette($: EngineInterface): Promise<void> {
   }
   const dark = values.background ?? '#000000'
   // Real hues only: a monochrome theme would otherwise give every agent grey.
+  // And only ones agentColor takes, so an agent is one colour in Den and the
+  // dock too.
   const themed = [...new Set(PALETTE_KEYS.map(k => values[k]).filter((c): c is string => Boolean(c)))]
-    .filter(c => Math.abs(luminance(c) - luminance(dark)) > 60 && saturation(c) >= 40)
+    .filter(c => Math.abs(luminance(c) - luminance(dark)) > 60 && saturation(c) >= 40 && agentColor(c))
   const next: Palette = {
     colors: fillHues(themed, dark),
     dark,
